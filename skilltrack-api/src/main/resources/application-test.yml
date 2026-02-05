@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    url: ${TEST_DATABASE_URL:jdbc:postgresql://localhost:5432/skilltrack_test}
+    username: ${TEST_DATABASE_USERNAME:skilltrack}
+    password: ${TEST_DATABASE_PASSWORD:skilltrack123}
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  
+  batch:
+    jdbc:
+      initialize-schema: always
+  
+  quartz:
+    job-store-type: memory
+
+logging:
+  level:
+    root: WARN
+    com.example.skilltrack: INFO

@@ -1,0 +1,13 @@
+dependencies {
+    // Common module
+    implementation project(':skilltrack-common')
+    
+    // Quartz Scheduler
+    implementation 'org.springframework.boot:spring-boot-starter-quartz'
+    
+    // Spring Context for dependency injection
+    implementation 'org.springframework:spring-context'
+    
+    // Email support
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+}

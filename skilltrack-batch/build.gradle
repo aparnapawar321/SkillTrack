@@ -1,0 +1,10 @@
+dependencies {
+    // Common module
+    implementation project(':skilltrack-common')
+    
+    // Spring Batch
+    implementation 'org.springframework.boot:spring-boot-starter-batch'
+    
+    // CSV processing
+    implementation 'org.apache.commons:commons-csv:1.10.0'
+}

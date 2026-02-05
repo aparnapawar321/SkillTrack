@@ -1,0 +1,6 @@
+rootProject.name = 'SkillTrack'
+
+include 'skilltrack-common'
+include 'skilltrack-api'
+include 'skilltrack-batch'
+include 'skilltrack-scheduler'
