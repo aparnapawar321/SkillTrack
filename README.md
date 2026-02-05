@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # SkillTrack
 A modular Learning Management System (LMS) where developers can register, enroll in courses, complete coding challenges, and track their progress.  The focus is on enterprise-grade backend design, leveraging advanced Java and Spring capabilities (persistence, scheduling, security, caching, testing, etc.). 
 =======
@@ -287,20 +286,3 @@ The application uses Hibernate's `ddl-auto=update` for development. For producti
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
-
-This project is licensed under the Apache License 2.0 - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- Spring Boot Team for the excellent framework
-- All open-source contributors
-
-## 📞 Support
-
-For support, email support@skilltrack.com or open an issue in the repository.
-
----
-
-**Built with ❤️ using Spring Boot and modern Java technologies**
->>>>>>> 8f82b69 (User/course/enrollments api created)
