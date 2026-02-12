@@ -8,6 +8,7 @@ import com.example.skilltrack.entity.User;
 import com.example.skilltrack.repository.CourseRepository;
 import com.example.skilltrack.repository.EnrollmentRepository;
 import com.example.skilltrack.repository.UserRepository;
+import com.example.skilltrack.exception.DuplicateEnrollmentException;
 import com.example.skilltrack.exception.ValidationException;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
@@ -40,8 +41,12 @@ public class EnrollmentService {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new RuntimeException("Course not found"));
         
+        if (Boolean.TRUE.equals(course.getDeleted())) {
+            throw new ValidationException("Cannot enroll in a deleted course");
+        }
+        
         if (enrollmentRepository.existsByUserIdAndCourseId(user.getId(), courseId)) {
-            throw new RuntimeException("User is already enrolled in this course");
+            throw new DuplicateEnrollmentException("User is already enrolled in this course");
         }
         
         Enrollment enrollment = Enrollment.builder()

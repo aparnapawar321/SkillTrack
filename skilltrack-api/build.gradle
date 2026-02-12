@@ -6,6 +6,9 @@ dependencies {
     // Common module
     implementation project(':skilltrack-common')
     
+    // Batch module
+    implementation project(':skilltrack-batch')
+    
     // Spring Data JPA (needed for @EnableJpaAuditing)
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     

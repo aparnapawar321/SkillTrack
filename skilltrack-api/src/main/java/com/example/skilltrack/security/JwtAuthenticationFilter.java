@@ -53,8 +53,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private String getJwtFromRequest(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
+            log.debug("Found JWT in Authorization header");
             return bearerToken.substring(7);
         }
+        
+        // Support token in query parameter for OAuth2 redirect flow
+        String tokenParam = request.getParameter("token");
+        if (StringUtils.hasText(tokenParam)) {
+            log.debug("Found JWT in query parameter");
+            return tokenParam;
+        }
+        
+        log.debug("No JWT found in request");
         return null;
     }
 }

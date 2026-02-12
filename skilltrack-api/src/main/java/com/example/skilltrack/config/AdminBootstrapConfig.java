@@ -41,39 +41,40 @@ public class AdminBootstrapConfig implements CommandLineRunner {
         
         boolean adminUserExists = userRepository.existsByUsername(adminUsername);
 
-        if (!adminRoleExists || !adminUserExists) {
-            log.info("Required ADMIN setup missing. Bootstrapping administrator...");
+        Role adminRole = roleRepository.findByName(Role.RoleName.ROLE_ADMIN)
+                .orElseGet(() -> roleRepository.save(new Role(Role.RoleName.ROLE_ADMIN)));
+        
+        Role instructorRole = roleRepository.findByName(Role.RoleName.ROLE_INSTRUCTOR)
+                .orElseGet(() -> roleRepository.save(new Role(Role.RoleName.ROLE_INSTRUCTOR)));
+        
+        Role studentRole = roleRepository.findByName(Role.RoleName.ROLE_STUDENT)
+                .orElseGet(() -> roleRepository.save(new Role(Role.RoleName.ROLE_STUDENT)));
 
-            Role adminRole = roleRepository.findByName(Role.RoleName.ROLE_ADMIN)
-                    .orElseGet(() -> roleRepository.save(new Role(Role.RoleName.ROLE_ADMIN)));
-            
-            Role instructorRole = roleRepository.findByName(Role.RoleName.ROLE_INSTRUCTOR)
-                    .orElseGet(() -> roleRepository.save(new Role(Role.RoleName.ROLE_INSTRUCTOR)));
-            
-            Role studentRole = roleRepository.findByName(Role.RoleName.ROLE_STUDENT)
-                    .orElseGet(() -> roleRepository.save(new Role(Role.RoleName.ROLE_STUDENT)));
+        User admin = userRepository.findByUsername(adminUsername)
+                .orElseGet(() -> User.builder()
+                        .username(adminUsername)
+                        .email(adminEmail)
+                        .enabled(true)
+                        .deleted(false)
+                        .build());
 
-            // Determine if the password should be encoded (if not already a BCrypt hash)
-            String encodedPassword = adminPassword.startsWith("$2a$") || adminPassword.startsWith("$2b$") 
-                ? adminPassword 
-                : passwordEncoder.encode(adminPassword);
+        // Always update password and roles to match configuration
+        String encodedPassword = adminPassword.startsWith("$2a$") || adminPassword.startsWith("$2b$") 
+            ? adminPassword 
+            : passwordEncoder.encode(adminPassword);
+        
+        admin.setPassword(encodedPassword);
+        admin.setEmail(adminEmail); // Ensure email is correct too
 
-            User admin = User.builder()
-                    .username(adminUsername)
-                    .email(adminEmail)
-                    .password(encodedPassword)
-                    .enabled(true)
-                    .deleted(false)
-                    .build();
+        // Clear and re-add roles to ensure consistency
+        admin.getRoles().clear();
+        admin.getRoleNames().clear();
+        
+        admin.addRole(adminRole);
+        admin.addRole(instructorRole);
+        admin.addRole(studentRole);
 
-            admin.addRole(adminRole);
-            admin.addRole(instructorRole);
-            admin.addRole(studentRole);
-
-            userRepository.save(admin);
-            log.info("Default ADMIN user created successfully: {}", adminUsername);
-        } else {
-            log.info("ADMIN user already exists. Skipping bootstrap.");
-        }
+        userRepository.save(admin);
+        log.info("ADMIN user synchronized successfully: {}", adminUsername);
     }
 }

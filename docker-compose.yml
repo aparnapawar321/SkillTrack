@@ -27,7 +27,7 @@ services:
     ports:
       - "5052:80"
     environment:
-      PGADMIN_DEFAULT_EMAIL: aparnapawar322@gmail.com
+      PGADMIN_DEFAULT_EMAIL: skilltrack@gmail.com
       PGADMIN_DEFAULT_PASSWORD: root
     restart: unless-stopped
   redis:

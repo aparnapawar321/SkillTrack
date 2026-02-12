@@ -18,6 +18,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.example.skilltrack.exception.ValidationException;
+import java.util.Optional;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -77,6 +79,54 @@ public class CourseService {
         // Admins can create courses for any valid instructor
         if (!isAdmin && !currentUser.getId().equals(courseDto.getInstructorId())) {
             throw new AccessDeniedException("You are not authorized to create a course for another instructor.");
+        }
+
+
+        // 4. Duplicate content check - Check ALL active courses for matching description and modules
+        List<Course> allActiveCourses = courseRepository.findAllByDeletedFalse();
+        for (Course existingCourse : allActiveCourses) {
+            // Check if description matches
+            boolean descriptionMatch = (existingCourse.getDescription() == null && courseDto.getDescription() == null) ||
+                    (existingCourse.getDescription() != null && existingCourse.getDescription().equals(courseDto.getDescription()));
+            
+            if (descriptionMatch) {
+                List<CourseModule> existingModules = existingCourse.getModules();
+                List<CourseModuleDto> newModules = courseDto.getModules();
+                int newModulesCount = (newModules != null) ? newModules.size() : 0;
+                
+                // Check if module count matches
+                if (existingModules.size() == newModulesCount) {
+                    boolean modulesMatch = true;
+                    
+                    // If there are modules, check each one for matching title and content
+                    if (newModules != null && !newModules.isEmpty()) {
+                        for (int i = 0; i < newModules.size(); i++) {
+                            CourseModule em = existingModules.get(i);
+                            CourseModuleDto nm = newModules.get(i);
+                            
+                            // Check module title match
+                            boolean titleMatch = em.getTitle().equals(nm.getTitle());
+                            
+                            // Check module content match
+                            boolean contentMatch = (em.getContent() == null && nm.getContent() == null) ||
+                                    (em.getContent() != null && em.getContent().equals(nm.getContent()));
+                            
+                            if (!titleMatch || !contentMatch) {
+                                modulesMatch = false;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // If description and all modules match, it's a duplicate
+                    if (modulesMatch) {
+                        String errorMessage = existingCourse.getTitle().equals(courseDto.getTitle())
+                                ? "A course with identical title, description, and module content already exists."
+                                : String.format("A course with identical description and module content already exists (existing course: '%s'). Please create original content.", existingCourse.getTitle());
+                        throw new ValidationException(errorMessage);
+                    }
+                }
+            }
         }
 
         Course course = Course.builder()

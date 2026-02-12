@@ -16,7 +16,7 @@ public class JwtResponseDto {
     private String token;
     private String refreshToken;
     @Builder.Default
-    private String type = "Bearer";
+    private String type = "JWT Bearer";
     private Long userId;
     private String username;
     private String email;

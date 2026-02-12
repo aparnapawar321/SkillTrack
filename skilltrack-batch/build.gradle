@@ -1,9 +1,19 @@
+plugins {
+    id 'java-library'
+}
+
 dependencies {
     // Common module
-    implementation project(':skilltrack-common')
+    api project(':skilltrack-common')
     
     // Spring Batch
-    implementation 'org.springframework.boot:spring-boot-starter-batch'
+    api 'org.springframework.boot:spring-boot-starter-batch'
+    
+    // Spring Data JPA
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    
+    // JSON support
+    implementation 'org.springframework.boot:spring-boot-starter-json'
     
     // CSV processing
     implementation 'org.apache.commons:commons-csv:1.10.0'

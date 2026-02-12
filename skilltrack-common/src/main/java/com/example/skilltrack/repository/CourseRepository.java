@@ -26,4 +26,8 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     Optional<Course> findByIdAndDeletedFalse(Long id);
     
     List<Course> findByInstructorIdAndDeletedFalse(Long instructorId);
+    
+    boolean existsByTitleAndDeletedFalse(String title);
+    
+    java.util.Optional<Course> findByTitleAndDeletedFalse(String title);
 }

@@ -105,8 +105,9 @@ public class UserService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String username = authentication.getName();
         
-        User user = userRepository.findActiveByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = userRepository.findActiveByEmail(username)
+                .or(() -> userRepository.findActiveByUsername(username))
+                .orElseThrow(() -> new RuntimeException("User not found: " + username));
         
         return convertToDto(user);
     }
