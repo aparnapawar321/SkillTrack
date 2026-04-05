@@ -9,7 +9,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
-
 import java.io.IOException;
 
 @Component
@@ -20,7 +19,8 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     private final JwtTokenProvider tokenProvider;
 
     @Override
-    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
+            Authentication authentication) throws IOException, ServletException {
         String targetUrl = determineTargetUrl(request, response, authentication);
 
         if (response.isCommitted()) {
@@ -32,21 +32,24 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         getRedirectStrategy().sendRedirect(request, response, targetUrl);
     }
 
-    protected String determineTargetUrl(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
-        org.springframework.security.oauth2.core.user.OAuth2User oAuth2User = (org.springframework.security.oauth2.core.user.OAuth2User) authentication.getPrincipal();
+    protected String determineTargetUrl(HttpServletRequest request, HttpServletResponse response,
+            Authentication authentication) {
+        org.springframework.security.oauth2.core.user.OAuth2User oAuth2User = (org.springframework.security.oauth2.core.user.OAuth2User) authentication
+                .getPrincipal();
         String username = oAuth2User.getAttribute("login");
 
         if (username == null) {
             username = oAuth2User.getAttribute("email");
         }
-        
+
         if (username == null) {
             username = authentication.getName();
         }
-        
+
         String token = tokenProvider.generateTokenWithRoles(username, authentication.getAuthorities());
 
-        // For testing purposes, we redirect to /api/auth/me with the token as a query param
+        // For testing purposes, we redirect to /api/auth/me with the token as a query
+        // param
         // In a real frontend app, this would redirect to a frontend URL with the token
         return UriComponentsBuilder.fromUriString("http://localhost:8080/api/auth/me")
                 .queryParam("token", token)

@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import com.example.skilltrack.repository.UserRepository;
 import com.example.skilltrack.entity.Role;
 import com.example.skilltrack.entity.User;
@@ -34,6 +35,7 @@ public class CourseService {
     private final EnrollmentRepository enrollmentRepository;
     
     @Transactional(readOnly = true)
+    @Cacheable(value = "courses", key = "'all'")
     public List<CourseDto> getAllCourses() {
         return courseRepository.findAllByDeletedFalse().stream()
                 .map(this::convertToDto)
@@ -152,7 +154,10 @@ public class CourseService {
     }
     
     @Transactional
-    @CacheEvict(value = "courses", key = "#id")
+    @Caching(evict = {
+        @CacheEvict(value = "courses", key = "#id"),
+        @CacheEvict(value = "courses", key = "'all'")
+    })
     public CourseDto updateCourse(Long id, CourseDto courseDto) {
         Course course = courseRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new RuntimeException("Course not found"));
@@ -178,7 +183,10 @@ public class CourseService {
     }
     
     @Transactional
-    @CacheEvict(value = "courses", key = "#id")
+    @Caching(evict = {
+        @CacheEvict(value = "courses", key = "#id"),
+        @CacheEvict(value = "courses", key = "'all'")
+    })
     public void deleteCourse(Long id) {
         Course course = courseRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new RuntimeException("Course not found"));
@@ -209,7 +217,10 @@ public class CourseService {
     }
     
     @Transactional
-    @CacheEvict(value = "courses", key = "#id")
+    @Caching(evict = {
+        @CacheEvict(value = "courses", key = "#id"),
+        @CacheEvict(value = "courses", key = "'all'")
+    })
     public CourseDto restoreCourse(Long id) {
         Course course = courseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Course not found with ID: " + id));

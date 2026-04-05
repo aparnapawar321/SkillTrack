@@ -13,6 +13,8 @@ import com.example.skilltrack.exception.ValidationException;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,7 @@ public class EnrollmentService {
     private final UserRepository userRepository;
     
     @Transactional
+    @CacheEvict(value = "enrollments", allEntries = true)
     public EnrollmentDto enrollInCourse(Long courseId) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String username = authentication.getName();
@@ -62,6 +65,7 @@ public class EnrollmentService {
     }
     
     @Transactional
+    @CacheEvict(value = "enrollments", allEntries = true)
     public void unenroll(Long enrollmentId) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String username = authentication.getName();
@@ -78,6 +82,7 @@ public class EnrollmentService {
     }
     
     @Transactional(readOnly = true)
+    @Cacheable(value = "enrollments", key = "T(org.springframework.security.core.context.SecurityContextHolder).getContext().getAuthentication().getName()")
     public List<EnrollmentDto> getMyEnrollments() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String username = authentication.getName();
@@ -89,8 +94,23 @@ public class EnrollmentService {
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
     }
+
+    @Transactional(readOnly = true)
+    public EnrollmentDto getEnrollmentByCourseId(Long courseId) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String username = authentication.getName();
+        
+        User user = userRepository.findActiveByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        Enrollment enrollment = enrollmentRepository.findByUserIdAndCourseId(user.getId(), courseId)
+                .orElseThrow(() -> new RuntimeException("Enrollment not found for this course"));
+                
+        return convertToDto(enrollment);
+    }
     
     @Transactional
+    @CacheEvict(value = "enrollments", allEntries = true)
     public EnrollmentDto updateProgress(Long enrollmentId, Integer progress) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String username = authentication.getName();

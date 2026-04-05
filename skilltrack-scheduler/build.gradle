@@ -10,4 +10,7 @@ dependencies {
     
     // Email support
     implementation 'org.springframework.boot:spring-boot-starter-mail'
+    
+    // JPA for entity access
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 }

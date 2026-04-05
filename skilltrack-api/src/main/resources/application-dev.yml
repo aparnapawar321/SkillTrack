@@ -1,9 +1,9 @@
 spring:
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/skilltrack}
-    username: ${DATABASE_USERNAME:skilltrack}
-    password: ${DATABASE_PASSWORD:skilltrack123}
-    driver-class-name: org.postgresql.Driver
+    url: jdbc:h2:mem:skilltrack;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driverClassName: org.h2.Driver
+    username: sa
+    password: 
   
   jpa:
     hibernate:
@@ -11,10 +11,26 @@ spring:
     show-sql: true
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+        dialect: org.hibernate.dialect.H2Dialect
   
   cache:
-    type: none  # Disable caching in dev mode for testing
+    type: caffeine
+  
+  quartz:
+    properties:
+      org:
+        quartz:
+          jobStore:
+            driverDelegateClass: org.quartz.impl.jdbcjobstore.StdJDBCDelegate
+
+app:
+  email:
+    enabled: true
+
+management:
+  health:
+    redis:
+      enabled: false
 
 logging:
   level:
@@ -23,7 +39,3 @@ logging:
     org.springframework.web: DEBUG
     org.springframework.security: DEBUG
     org.hibernate.SQL: DEBUG
-
-app:
-  email:
-    enabled: false  # Disable emails in dev mode

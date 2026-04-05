@@ -30,8 +30,14 @@ public class Role {
     private RoleName name;
     
     @ManyToMany(mappedBy = "roles")
-    @Builder.Default
     private Set<User> users = new HashSet<>();
+
+    public Set<User> getUsers() {
+        if (users == null) {
+            users = new HashSet<>();
+        }
+        return users;
+    }
     
     public enum RoleName {
         ROLE_STUDENT,

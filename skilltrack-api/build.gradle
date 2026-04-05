@@ -9,6 +9,10 @@ dependencies {
     // Batch module
     implementation project(':skilltrack-batch')
     
+    // Scheduler module
+    implementation project(':skilltrack-scheduler')
+    implementation 'org.springframework.boot:spring-boot-starter-quartz'
+    
     // Spring Data JPA (needed for @EnableJpaAuditing)
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     
@@ -28,6 +32,9 @@ dependencies {
     
     // Redis (optional)
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    
+    // H2 Database for dev mode
+    runtimeOnly 'com.h2database:h2'
     
     // Spring Actuator
     implementation 'org.springframework.boot:spring-boot-starter-actuator'

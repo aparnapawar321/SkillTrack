@@ -18,6 +18,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -101,6 +103,7 @@ public class UserService {
     }
     
     @Transactional(readOnly = true)
+    @Cacheable(value = "users", key = "T(org.springframework.security.core.context.SecurityContextHolder).getContext().getAuthentication().getName()")
     public UserDto getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String username = authentication.getName();
@@ -113,6 +116,7 @@ public class UserService {
     }
     
     @Transactional(readOnly = true)
+    @Cacheable(value = "users", key = "#id")
     public UserDto getUserById(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -120,6 +124,7 @@ public class UserService {
     }
     
     @Transactional
+    @CacheEvict(value = "users", allEntries = true)
     public UserDto updateUserRoles(Long userId, Set<Role.RoleName> roleNames) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -154,6 +159,7 @@ public class UserService {
     }
     
     @Transactional
+    @CacheEvict(value = "users", allEntries = true)
     public UserDto addRoleToUser(Long userId, Role.RoleName roleName) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -168,6 +174,7 @@ public class UserService {
     }
 
     @Transactional
+    @CacheEvict(value = "users", allEntries = true)
     public UserDto removeRoleFromUser(Long userId, Role.RoleName roleName) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -191,6 +198,7 @@ public class UserService {
     }
 
     @Transactional
+    @CacheEvict(value = "users", allEntries = true)
     public UserDto setUserMainRole(Long userId, Role.RoleName targetRole) {
         if (targetRole != Role.RoleName.ROLE_STUDENT && targetRole != Role.RoleName.ROLE_INSTRUCTOR) {
             throw new RuntimeException("This API only supports STUDENT or INSTRUCTOR assignments.");

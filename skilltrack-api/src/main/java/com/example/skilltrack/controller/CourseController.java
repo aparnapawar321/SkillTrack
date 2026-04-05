@@ -57,4 +57,18 @@ public class CourseController {
         courseService.deleteCourse(id);
         return ResponseEntity.noContent().build();
     }
+    
+    @GetMapping("/{id}/progress")
+    @Operation(summary = "Get course progress", description = "Returns current user's enrollment progress for the course")
+    public ResponseEntity<com.example.skilltrack.dto.EnrollmentDto> getCourseProgress(@PathVariable Long id, @org.springframework.beans.factory.annotation.Autowired com.example.skilltrack.service.EnrollmentService enrollmentService) {
+        return ResponseEntity.ok(enrollmentService.getEnrollmentByCourseId(id));
+    }
+    
+    @PutMapping("/{id}/progress")
+    @Operation(summary = "Update course progress", description = "Updates progress for the current user's enrollment in this course")
+    public ResponseEntity<com.example.skilltrack.dto.EnrollmentDto> updateCourseProgress(@PathVariable Long id, @RequestBody java.util.Map<String, Integer> request, @org.springframework.beans.factory.annotation.Autowired com.example.skilltrack.service.EnrollmentService enrollmentService) {
+        Integer progress = request.get("progress");
+        com.example.skilltrack.dto.EnrollmentDto enrollment = enrollmentService.getEnrollmentByCourseId(id);
+        return ResponseEntity.ok(enrollmentService.updateProgress(enrollment.getId(), progress));
+    }
 }

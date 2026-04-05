@@ -840,6 +840,32 @@
                         "description": "Get history of job executions (Admin only)."
                     },
                     "response": []
+                },
+                {
+                    "name": "Send Test Email",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/scheduler/test-email?email=admin@example.com",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "scheduler",
+                                "test-email"
+                            ],
+                            "query": [
+                                {
+                                    "key": "email",
+                                    "value": "admin@example.com"
+                                }
+                            ]
+                        },
+                        "description": "Send a test email via SendGrid to verify configuration (Admin only)."
+                    },
+                    "response": []
                 }
             ],
             "description": "Quartz scheduler management endpoints."

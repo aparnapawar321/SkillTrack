@@ -79,7 +79,6 @@ spring:
             instanceName: SkillTrackScheduler
             instanceId: AUTO
           jobStore:
-            class: org.quartz.impl.jdbcjobstore.JobStoreTX
             driverDelegateClass: org.quartz.impl.jdbcjobstore.PostgreSQLDelegate
             useProperties: false
             tablePrefix: QRTZ_
@@ -133,6 +132,9 @@ app:
 
 # Actuator configuration
 management:
+  health:
+    mail:
+      enabled: false
   endpoints:
     web:
       exposure:
