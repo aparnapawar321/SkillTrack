@@ -16,29 +16,23 @@ import java.util.Set;
 @Builder
 @Audited
 public class Role {
-    
+
     public Role(RoleName name) {
         this.name = name;
     }
-    
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
+
     @Enumerated(EnumType.STRING)
     @Column(unique = true, nullable = false, length = 20)
     private RoleName name;
-    
+
     @ManyToMany(mappedBy = "roles")
+    @Builder.Default
     private Set<User> users = new HashSet<>();
 
-    public Set<User> getUsers() {
-        if (users == null) {
-            users = new HashSet<>();
-        }
-        return users;
-    }
-    
     public enum RoleName {
         ROLE_STUDENT,
         ROLE_INSTRUCTOR,

@@ -13,7 +13,14 @@ public class EmailService {
 
     private final JavaMailSender javaMailSender;
 
+    @org.springframework.beans.factory.annotation.Value("${app.email.enabled:false}")
+    private boolean emailEnabled;
+
     public void sendReminderEmail(String toEmail, String courseTitle) {
+        if (!emailEnabled) {
+            log.info("Email sending is disabled. Skipping reminder for {}", toEmail);
+            return;
+        }
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setTo(toEmail);
