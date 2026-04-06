@@ -18,7 +18,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -31,138 +31,140 @@ public class EnrollmentService {
     private final EnrollmentRepository enrollmentRepository;
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
+    private final TransactionTemplate transactionTemplate;
     
-    @Transactional
     @CacheEvict(value = "enrollments", allEntries = true)
     public EnrollmentDto enrollInCourse(Long courseId) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String username = authentication.getName();
-        
-        User user = userRepository.findActiveByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new RuntimeException("Course not found"));
-        
-        if (Boolean.TRUE.equals(course.getDeleted())) {
-            throw new ValidationException("Cannot enroll in a deleted course");
-        }
-        
-        if (enrollmentRepository.existsByUserIdAndCourseId(user.getId(), courseId)) {
-            throw new DuplicateEnrollmentException("User is already enrolled in this course");
-        }
-        
-        Enrollment enrollment = Enrollment.builder()
-                .user(user)
-                .course(course)
-                .progress(0)
-                .build();
-        
-        Enrollment savedEnrollment = enrollmentRepository.save(enrollment);
-        log.info("User {} enrolled in course {}", username, course.getTitle());
-        
-        return convertToDto(savedEnrollment);
+        return transactionTemplate.execute(status -> {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String username = authentication.getName();
+            
+            User user = userRepository.findActiveByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+            
+            Course course = courseRepository.findById(courseId)
+                    .orElseThrow(() -> new RuntimeException("Course not found"));
+            
+            if (Boolean.TRUE.equals(course.getDeleted())) {
+                throw new ValidationException("Cannot enroll in a deleted course");
+            }
+            
+            if (enrollmentRepository.existsByUserIdAndCourseId(user.getId(), courseId)) {
+                throw new DuplicateEnrollmentException("User is already enrolled in this course");
+            }
+            
+            Enrollment enrollment = Enrollment.builder()
+                    .user(user)
+                    .course(course)
+                    .progress(0)
+                    .build();
+            
+            Enrollment savedEnrollment = enrollmentRepository.save(enrollment);
+            log.info("User {} enrolled in course {}", username, course.getTitle());
+            
+            return convertToDto(savedEnrollment);
+        });
     }
     
-    @Transactional
     @CacheEvict(value = "enrollments", allEntries = true)
     public void unenroll(Long enrollmentId) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String username = authentication.getName();
-        
-        Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
-                .orElseThrow(() -> new RuntimeException("Enrollment not found"));
-        
-        if (!enrollment.getUser().getUsername().equals(username)) {
-            throw new RuntimeException("Unauthorized to unenroll from this course");
-        }
-        
-        enrollmentRepository.delete(enrollment);
-        log.info("User {} unenrolled from course {}", username, enrollment.getCourse().getTitle());
+        transactionTemplate.executeWithoutResult(status -> {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String username = authentication.getName();
+            
+            Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
+                    .orElseThrow(() -> new RuntimeException("Enrollment not found"));
+            
+            if (!enrollment.getUser().getUsername().equals(username)) {
+                throw new RuntimeException("Unauthorized to unenroll from this course");
+            }
+            
+            enrollmentRepository.delete(enrollment);
+            log.info("User {} unenrolled from course {}", username, enrollment.getCourse().getTitle());
+        });
     }
     
-    @Transactional(readOnly = true)
     @Cacheable(value = "enrollments", key = "T(org.springframework.security.core.context.SecurityContextHolder).getContext().getAuthentication().getName()")
     public List<EnrollmentDto> getMyEnrollments() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String username = authentication.getName();
-        
-        User user = userRepository.findActiveByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        
-        return enrollmentRepository.findByUserId(user.getId()).stream()
-                .map(this::convertToDto)
-                .collect(Collectors.toList());
+        return transactionTemplate.execute(status -> {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String username = authentication.getName();
+            
+            User user = userRepository.findActiveByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+            
+            return enrollmentRepository.findByUserId(user.getId()).stream()
+                    .map(this::convertToDto)
+                    .collect(Collectors.toList());
+        });
     }
 
-    @Transactional(readOnly = true)
     public EnrollmentDto getEnrollmentByCourseId(Long courseId) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String username = authentication.getName();
-        
-        User user = userRepository.findActiveByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        
-        Enrollment enrollment = enrollmentRepository.findByUserIdAndCourseId(user.getId(), courseId)
-                .orElseThrow(() -> new RuntimeException("Enrollment not found for this course"));
-                
-        return convertToDto(enrollment);
+        return transactionTemplate.execute(status -> {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String username = authentication.getName();
+            
+            User user = userRepository.findActiveByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+            
+            Enrollment enrollment = enrollmentRepository.findByUserIdAndCourseId(user.getId(), courseId)
+                    .orElseThrow(() -> new RuntimeException("Enrollment not found for this course"));
+                    
+            return convertToDto(enrollment);
+        });
     }
     
-    @Transactional
     @CacheEvict(value = "enrollments", allEntries = true)
     public EnrollmentDto updateProgress(Long enrollmentId, Integer progress) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String username = authentication.getName();
-        
-        log.info("Updating progress for enrollment {}: User={}, NewProgress={}%", enrollmentId, username, progress);
-        
-        User currentUser = userRepository.findActiveByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        
-        // 1. Instructor check
-        boolean isInstructor = currentUser.getRoles().stream()
-                .anyMatch(role -> role.getName() == Role.RoleName.ROLE_INSTRUCTOR);
-        if (isInstructor) {
-            throw new ValidationException("Instructors are not allowed to update progress through this API");
-        }
+        return transactionTemplate.execute(status -> {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String username = authentication.getName();
+            
+            log.info("Updating progress for enrollment {}: User={}, NewProgress={}%", enrollmentId, username, progress);
+            
+            User currentUser = userRepository.findActiveByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+            
+            boolean isInstructor = currentUser.getRoles().stream()
+                    .anyMatch(role -> role.getName() == Role.RoleName.ROLE_INSTRUCTOR);
+            if (isInstructor) {
+                throw new ValidationException("Instructors are not allowed to update progress through this API");
+            }
 
-        // 0. Progress range validation
-        if (progress == null || progress < 0 || progress > 100) {
-            throw new ValidationException("Progress must be between 0 and 100");
-        }
-        
-        Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
-                .orElseThrow(() -> new RuntimeException("Enrollment not found"));
-        
-        if (!enrollment.getUser().getUsername().equals(username)) {
-            throw new RuntimeException("Unauthorized to update this enrollment");
-        }
-        
-        // 2. Post-completion check (Allow re-submitting current 100%)
-        if (enrollment.getCompletedAt() != null && progress < 100) {
-            throw new ValidationException("Cannot decrease progress for a completed course");
-        }
-        
-        if (enrollment.getCompletedAt() != null && progress == 100) {
-            log.info("Progress is already 100% for enrollment {}, skipping update.", enrollmentId);
-            return convertToDto(enrollment);
-        }
-        
-        // 3. Backward jump check
-        if (progress < enrollment.getProgress()) {
-            throw new ValidationException("Progress cannot jump backwards. Current progress: " + enrollment.getProgress() + "%");
-        }
-        
-        enrollment.setProgress(progress);
-        if (progress >= 100) {
-            enrollment.markAsCompleted();
-        }
-        
-        Enrollment updatedEnrollment = enrollmentRepository.save(enrollment);
-        log.info("Updated progress for enrollment {} to {}% for user {}", enrollmentId, progress, username);
-        
-        return convertToDto(updatedEnrollment);
+            if (progress == null || progress < 0 || progress > 100) {
+                throw new ValidationException("Progress must be between 0 and 100");
+            }
+            
+            Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
+                    .orElseThrow(() -> new RuntimeException("Enrollment not found"));
+            
+            if (!enrollment.getUser().getUsername().equals(username)) {
+                throw new RuntimeException("Unauthorized to update this enrollment");
+            }
+            
+            if (enrollment.getCompletedAt() != null && progress < 100) {
+                throw new ValidationException("Cannot decrease progress for a completed course");
+            }
+            
+            if (enrollment.getCompletedAt() != null && progress == 100) {
+                log.info("Progress is already 100% for enrollment {}, skipping update.", enrollmentId);
+                return convertToDto(enrollment);
+            }
+            
+            if (progress < enrollment.getProgress()) {
+                throw new ValidationException("Progress cannot jump backwards. Current progress: " + enrollment.getProgress() + "%");
+            }
+            
+            enrollment.setProgress(progress);
+            if (progress >= 100) {
+                enrollment.markAsCompleted();
+            }
+            
+            Enrollment updatedEnrollment = enrollmentRepository.save(enrollment);
+            log.info("Updated progress for enrollment {} to {}% for user {}", enrollmentId, progress, username);
+            
+            return convertToDto(updatedEnrollment);
+        });
     }
     
     private EnrollmentDto convertToDto(Enrollment enrollment) {

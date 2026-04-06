@@ -18,7 +18,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import com.example.skilltrack.exception.ValidationException;
 import java.util.Optional;
 
@@ -33,206 +33,199 @@ public class CourseService {
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
     private final EnrollmentRepository enrollmentRepository;
+    private final TransactionTemplate transactionTemplate;
     
-    @Transactional(readOnly = true)
     @Cacheable(value = "courses", key = "'all'")
     public List<CourseDto> getAllCourses() {
-        return courseRepository.findAllByDeletedFalse().stream()
+        return transactionTemplate.execute(status -> 
+            courseRepository.findAllByDeletedFalse().stream()
                 .map(this::convertToDto)
-                .collect(Collectors.toList());
+                .collect(Collectors.toList())
+        );
     }
     
-    @Transactional(readOnly = true)
     @Cacheable(value = "courses", key = "#id")
     public CourseDto getCourseById(Long id) {
-        Course course = courseRepository.findActiveById(id)
-                .orElseThrow(() -> new RuntimeException("Course not found"));
-        return convertToDto(course);
+        return transactionTemplate.execute(status -> {
+            Course course = courseRepository.findActiveById(id)
+                    .orElseThrow(() -> new RuntimeException("Course not found"));
+            return convertToDto(course);
+        });
     }
     
-    @Transactional
     @CacheEvict(value = "courses", allEntries = true)
     public CourseDto createCourse(CourseDto courseDto) {
-        // 1. Get current authenticated user
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new AccessDeniedException("Full authentication is required to access this resource");
-        }
-        
-        String currentUsername = authentication.getName();
-        User currentUser = userRepository.findActiveByUsername(currentUsername)
-                .orElseThrow(() -> new AccessDeniedException("User not found"));
-        
-        boolean isAdmin = currentUser.getRoles().stream()
-                .anyMatch(r -> r.getName() == Role.RoleName.ROLE_ADMIN);
-        
-        // 2. Validate Instructor ID existence and role
-        User assignedInstructor = userRepository.findById(courseDto.getInstructorId())
-                .orElseThrow(() -> new RuntimeException("Assigned instructor not found with ID: " + courseDto.getInstructorId()));
-        
-        boolean isValidInstructor = assignedInstructor.getRoles().stream()
-                .anyMatch(r -> r.getName() == Role.RoleName.ROLE_INSTRUCTOR || r.getName() == Role.RoleName.ROLE_ADMIN);
-        
-        if (!isValidInstructor) {
-            throw new RuntimeException("The user with ID " + courseDto.getInstructorId() + " does not have an Instructor or Admin role.");
-        }
-        
-        // 3. Ownership check: Instructors can only create courses for DISCONNECTED themselves
-        // Admins can create courses for any valid instructor
-        if (!isAdmin && !currentUser.getId().equals(courseDto.getInstructorId())) {
-            throw new AccessDeniedException("You are not authorized to create a course for another instructor.");
-        }
-
-
-        // 4. Duplicate content check - Check ALL active courses for matching description and modules
-        List<Course> allActiveCourses = courseRepository.findAllByDeletedFalse();
-        for (Course existingCourse : allActiveCourses) {
-            // Check if description matches
-            boolean descriptionMatch = (existingCourse.getDescription() == null && courseDto.getDescription() == null) ||
-                    (existingCourse.getDescription() != null && existingCourse.getDescription().equals(courseDto.getDescription()));
+        return transactionTemplate.execute(status -> {
+            // 1. Get current authenticated user
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                throw new AccessDeniedException("Full authentication is required to access this resource");
+            }
             
-            if (descriptionMatch) {
-                List<CourseModule> existingModules = existingCourse.getModules();
-                List<CourseModuleDto> newModules = courseDto.getModules();
-                int newModulesCount = (newModules != null) ? newModules.size() : 0;
+            String currentUsername = authentication.getName();
+            User currentUser = userRepository.findActiveByUsername(currentUsername)
+                    .orElseThrow(() -> new AccessDeniedException("User not found"));
+            
+            boolean isAdmin = currentUser.getRoles().stream()
+                    .anyMatch(r -> r.getName() == Role.RoleName.ROLE_ADMIN);
+            
+            // 2. Validate Instructor ID existence and role
+            User assignedInstructor = userRepository.findById(courseDto.getInstructorId())
+                    .orElseThrow(() -> new RuntimeException("Assigned instructor not found with ID: " + courseDto.getInstructorId()));
+            
+            boolean isValidInstructor = assignedInstructor.getRoles().stream()
+                    .anyMatch(r -> r.getName() == Role.RoleName.ROLE_INSTRUCTOR || r.getName() == Role.RoleName.ROLE_ADMIN);
+            
+            if (!isValidInstructor) {
+                throw new RuntimeException("The user with ID " + courseDto.getInstructorId() + " does not have an Instructor or Admin role.");
+            }
+            
+            // 3. Ownership check: Instructors can only create courses for DISCONNECTED themselves
+            // Admins can create courses for any valid instructor
+            if (!isAdmin && !currentUser.getId().equals(courseDto.getInstructorId())) {
+                throw new AccessDeniedException("You are not authorized to create a course for another instructor.");
+            }
+
+
+            // 4. Duplicate content check - Check ALL active courses for matching description and modules
+            List<Course> allActiveCourses = courseRepository.findAllByDeletedFalse();
+            for (Course existingCourse : allActiveCourses) {
+                boolean descriptionMatch = (existingCourse.getDescription() == null && courseDto.getDescription() == null) ||
+                        (existingCourse.getDescription() != null && existingCourse.getDescription().equals(courseDto.getDescription()));
                 
-                // Check if module count matches
-                if (existingModules.size() == newModulesCount) {
-                    boolean modulesMatch = true;
+                if (descriptionMatch) {
+                    List<CourseModule> existingModules = existingCourse.getModules();
+                    List<CourseModuleDto> newModules = courseDto.getModules();
+                    int newModulesCount = (newModules != null) ? newModules.size() : 0;
                     
-                    // If there are modules, check each one for matching title and content
-                    if (newModules != null && !newModules.isEmpty()) {
-                        for (int i = 0; i < newModules.size(); i++) {
-                            CourseModule em = existingModules.get(i);
-                            CourseModuleDto nm = newModules.get(i);
-                            
-                            // Check module title match
-                            boolean titleMatch = em.getTitle().equals(nm.getTitle());
-                            
-                            // Check module content match
-                            boolean contentMatch = (em.getContent() == null && nm.getContent() == null) ||
-                                    (em.getContent() != null && em.getContent().equals(nm.getContent()));
-                            
-                            if (!titleMatch || !contentMatch) {
-                                modulesMatch = false;
-                                break;
+                    if (existingModules.size() == newModulesCount) {
+                        boolean modulesMatch = true;
+                        if (newModules != null && !newModules.isEmpty()) {
+                            for (int i = 0; i < newModules.size(); i++) {
+                                CourseModule em = existingModules.get(i);
+                                CourseModuleDto nm = newModules.get(i);
+                                boolean titleMatch = em.getTitle().equals(nm.getTitle());
+                                boolean contentMatch = (em.getContent() == null && nm.getContent() == null) ||
+                                        (em.getContent() != null && em.getContent().equals(nm.getContent()));
+                                if (!titleMatch || !contentMatch) {
+                                    modulesMatch = false;
+                                    break;
+                                }
                             }
                         }
-                    }
-                    
-                    // If description and all modules match, it's a duplicate
-                    if (modulesMatch) {
-                        String errorMessage = existingCourse.getTitle().equals(courseDto.getTitle())
-                                ? "A course with identical title, description, and module content already exists."
-                                : String.format("A course with identical description and module content already exists (existing course: '%s'). Please create original content.", existingCourse.getTitle());
-                        throw new ValidationException(errorMessage);
+                        if (modulesMatch) {
+                            String errorMessage = existingCourse.getTitle().equals(courseDto.getTitle())
+                                    ? "A course with identical title, description, and module content already exists."
+                                    : String.format("A course with identical description and module content already exists (existing course: '%s'). Please create original content.", existingCourse.getTitle());
+                            throw new ValidationException(errorMessage);
+                        }
                     }
                 }
             }
-        }
 
-        Course course = Course.builder()
-                .title(courseDto.getTitle())
-                .description(courseDto.getDescription())
-                .instructorId(courseDto.getInstructorId())
-                .build();
-        
-        if (courseDto.getModules() != null) {
-            courseDto.getModules().forEach(moduleDto -> {
-                CourseModule module = CourseModule.builder()
-                        .title(moduleDto.getTitle())
-                        .content(moduleDto.getContent())
-                        .orderIndex(moduleDto.getOrderIndex())
-                        .build();
-                course.addModule(module);
-            });
-        }
-        
-        Course savedCourse = courseRepository.save(course);
-        log.info("Created course: {}", savedCourse.getTitle());
-        return convertToDto(savedCourse);
+            Course course = Course.builder()
+                    .title(courseDto.getTitle())
+                    .description(courseDto.getDescription())
+                    .instructorId(courseDto.getInstructorId())
+                    .build();
+            
+            if (courseDto.getModules() != null) {
+                courseDto.getModules().forEach(moduleDto -> {
+                    CourseModule module = CourseModule.builder()
+                            .title(moduleDto.getTitle())
+                            .content(moduleDto.getContent())
+                            .orderIndex(moduleDto.getOrderIndex())
+                            .build();
+                    course.addModule(module);
+                });
+            }
+            
+            Course savedCourse = courseRepository.save(course);
+            log.info("Created course: {}", savedCourse.getTitle());
+            return convertToDto(savedCourse);
+        });
     }
     
-    @Transactional
     @Caching(evict = {
         @CacheEvict(value = "courses", key = "#id"),
         @CacheEvict(value = "courses", key = "'all'")
     })
     public CourseDto updateCourse(Long id, CourseDto courseDto) {
-        Course course = courseRepository.findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new RuntimeException("Course not found"));
-        
-        // Security check
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        User currentUser = userRepository.findActiveByUsername(authentication.getName())
-                .orElseThrow(() -> new AccessDeniedException("User not found"));
-        
-        boolean isAdmin = currentUser.getRoles().stream()
-                .anyMatch(r -> r.getName() == Role.RoleName.ROLE_ADMIN);
-        
-        if (!isAdmin && !course.getInstructorId().equals(currentUser.getId())) {
-            throw new AccessDeniedException("You are not authorized to update this course. Only the assigned instructor or an admin can do so.");
-        }
-        
-        course.setTitle(courseDto.getTitle());
-        course.setDescription(courseDto.getDescription());
-        
-        Course updatedCourse = courseRepository.save(course);
-        log.info("Updated course: {}", updatedCourse.getTitle());
-        return convertToDto(updatedCourse);
+        return transactionTemplate.execute(status -> {
+            Course course = courseRepository.findByIdAndDeletedFalse(id)
+                    .orElseThrow(() -> new RuntimeException("Course not found"));
+            
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            User currentUser = userRepository.findActiveByUsername(authentication.getName())
+                    .orElseThrow(() -> new AccessDeniedException("User not found"));
+            
+            boolean isAdmin = currentUser.getRoles().stream()
+                    .anyMatch(r -> r.getName() == Role.RoleName.ROLE_ADMIN);
+            
+            if (!isAdmin && !course.getInstructorId().equals(currentUser.getId())) {
+                throw new AccessDeniedException("You are not authorized to update this course. Only the assigned instructor or an admin can do so.");
+            }
+            
+            course.setTitle(courseDto.getTitle());
+            course.setDescription(courseDto.getDescription());
+            
+            Course updatedCourse = courseRepository.save(course);
+            log.info("Updated course: {}", updatedCourse.getTitle());
+            return convertToDto(updatedCourse);
+        });
     }
     
-    @Transactional
     @Caching(evict = {
         @CacheEvict(value = "courses", key = "#id"),
         @CacheEvict(value = "courses", key = "'all'")
     })
     public void deleteCourse(Long id) {
-        Course course = courseRepository.findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new RuntimeException("Course not found"));
-        
-        // Security check
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        User currentUser = userRepository.findActiveByUsername(authentication.getName())
-                .orElseThrow(() -> new AccessDeniedException("User not found"));
-        
-        boolean isAdmin = currentUser.getRoles().stream()
-                .anyMatch(r -> r.getName() == Role.RoleName.ROLE_ADMIN);
-        
-        if (!isAdmin) {
-            if (!course.getInstructorId().equals(currentUser.getId())) {
-                throw new AccessDeniedException("You are not authorized to delete this course. Only the assigned instructor or an admin can do so.");
+        transactionTemplate.executeWithoutResult(status -> {
+            Course course = courseRepository.findByIdAndDeletedFalse(id)
+                    .orElseThrow(() -> new RuntimeException("Course not found"));
+            
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            User currentUser = userRepository.findActiveByUsername(authentication.getName())
+                    .orElseThrow(() -> new AccessDeniedException("User not found"));
+            
+            boolean isAdmin = currentUser.getRoles().stream()
+                    .anyMatch(r -> r.getName() == Role.RoleName.ROLE_ADMIN);
+            
+            if (!isAdmin) {
+                if (!course.getInstructorId().equals(currentUser.getId())) {
+                    throw new AccessDeniedException("You are not authorized to delete this course. Only the assigned instructor or an admin can do so.");
+                }
+                
+                boolean hasActiveEnrollments = enrollmentRepository.existsByCourseIdAndCompletedAtIsNull(id);
+                if (hasActiveEnrollments) {
+                    throw new IllegalStateException("Cannot delete course with active enrollments. Finish or cancel enrollments first.");
+                }
             }
             
-            // Check for active enrollments
-            boolean hasActiveEnrollments = enrollmentRepository.existsByCourseIdAndCompletedAtIsNull(id);
-            if (hasActiveEnrollments) {
-                throw new IllegalStateException("Cannot delete course with active enrollments. Finish or cancel enrollments first.");
-            }
-        }
-        
-        course.setDeleted(true);
-        courseRepository.save(course);
-        log.info("Soft deleted course: {}", course.getTitle());
+            course.setDeleted(true);
+            courseRepository.save(course);
+            log.info("Soft deleted course: {}", course.getTitle());
+        });
     }
     
-    @Transactional
     @Caching(evict = {
         @CacheEvict(value = "courses", key = "#id"),
         @CacheEvict(value = "courses", key = "'all'")
     })
     public CourseDto restoreCourse(Long id) {
-        Course course = courseRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Course not found with ID: " + id));
-        
-        if (course.getDeleted() == null || !course.getDeleted()) {
-            throw new RuntimeException("Course is not deleted");
-        }
-        
-        course.setDeleted(false);
-        Course restoredCourse = courseRepository.save(course);
-        log.info("Restored course: {}", restoredCourse.getTitle());
-        return convertToDto(restoredCourse);
+        return transactionTemplate.execute(status -> {
+            Course course = courseRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Course not found with ID: " + id));
+            
+            if (course.getDeleted() == null || !course.getDeleted()) {
+                throw new RuntimeException("Course is not deleted");
+            }
+            
+            course.setDeleted(false);
+            Course restoredCourse = courseRepository.save(course);
+            log.info("Restored course: {}", restoredCourse.getTitle());
+            return convertToDto(restoredCourse);
+        });
     }
     
     private CourseDto convertToDto(Course course) {

@@ -9,7 +9,7 @@ import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 import org.springframework.scheduling.quartz.QuartzJobBean;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 
@@ -20,28 +20,30 @@ public class DailyReminderJob extends QuartzJobBean {
 
     private final EnrollmentRepository enrollmentRepository;
     private final EmailService emailService;
+    private final TransactionTemplate transactionTemplate;
 
     @Override
-    @Transactional(readOnly = true)
     protected void executeInternal(JobExecutionContext context) throws JobExecutionException {
-        log.info("Executing DailyReminderJob to send emails for incomplete courses...");
-        
-        List<Enrollment> incompleteEnrollments = enrollmentRepository.findIncompleteEnrollments();
-        
-        if (incompleteEnrollments.isEmpty()) {
-            log.info("No incomplete courses found. Email sending skipped.");
-            return;
-        }
-
-        for (Enrollment enrollment : incompleteEnrollments) {
-            String toEmail = enrollment.getUser().getEmail();
-            String courseTitle = enrollment.getCourse().getTitle();
-            try {
-                emailService.sendReminderEmail(toEmail, courseTitle);
-            } catch (Exception e) {
-                log.error("Failed to process reminder for user: {}", toEmail, e);
+        transactionTemplate.executeWithoutResult(status -> {
+            log.info("Executing DailyReminderJob to send emails for incomplete courses...");
+            
+            List<Enrollment> incompleteEnrollments = enrollmentRepository.findIncompleteEnrollments();
+            
+            if (incompleteEnrollments.isEmpty()) {
+                log.info("No incomplete courses found. Email sending skipped.");
+                return;
             }
-        }
+
+            for (Enrollment enrollment : incompleteEnrollments) {
+                String toEmail = enrollment.getUser().getEmail();
+                String courseTitle = enrollment.getCourse().getTitle();
+                try {
+                    emailService.sendReminderEmail(toEmail, courseTitle);
+                } catch (Exception e) {
+                    log.error("Failed to process reminder for user: {}", toEmail, e);
+                }
+            }
+        });
         
         log.info("Finished executing DailyReminderJob.");
     }

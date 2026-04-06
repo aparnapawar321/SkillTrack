@@ -13,8 +13,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Optional;
 
@@ -33,6 +37,9 @@ class EnrollmentServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private TransactionTemplate transactionTemplate;
 
     @InjectMocks
     private EnrollmentService enrollmentService;
@@ -66,6 +73,18 @@ class EnrollmentServiceTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("student", null)
         );
+
+        // Simple mock to execute the callback for TransactionTemplate
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+
+        lenient().doAnswer(invocation -> {
+            java.util.function.Consumer<org.springframework.transaction.TransactionStatus> callback = invocation.getArgument(0);
+            callback.accept(null);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
     }
 
     @Test
