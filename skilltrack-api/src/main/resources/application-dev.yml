@@ -7,11 +7,17 @@ spring:
   
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     show-sql: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
+        envers:
+          autoRegisterListeners: false
+  
+  sql:
+    init:
+      mode: always
   
   cache:
     type: caffeine
